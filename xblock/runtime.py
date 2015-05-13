@@ -867,7 +867,8 @@ class Runtime(object):
         """
         return self._wrap_ele(
             aside, view, frag, {
-                'block_id': block.scope_ids.usage_id,
+                'block-id': block.scope_ids.usage_id,  # changed cjshaw
+		'runtime-class': 'PreviewRuntime',  # changed cjshaw
                 'url_selector': 'asideBaseUrl',
             })
 
@@ -878,7 +879,7 @@ class Runtime(object):
         """
         wrapped = Fragment()
         data = {
-            'usage': block.scope_ids.usage_id,
+            'usage-id': block.scope_ids.usage_id,
             'block-type': block.scope_ids.block_type,
         }
         data.update(extra_data)
@@ -1013,6 +1014,9 @@ class Runtime(object):
         Handles any calls to the specified `handler_name`.
 
         Provides a fallback handler if the specified handler isn't found.
+	
+	cjshaw@mit.edu
+	loops through the asides to see if they have a valid handler to call
 
         :param handler_name: The name of the handler to call
         :param request: The request to handle
@@ -1024,12 +1028,20 @@ class Runtime(object):
             # Cache results of the handler call for later saving
             results = handler(request, suffix)
         else:
-            fallback_handler = getattr(block, "fallback_handler", None)
-            if fallback_handler and getattr(fallback_handler, '_is_xblock_handler', False):
-                # Cache results of the handler call for later saving
-                results = fallback_handler(handler_name, request, suffix)
-            else:
-                raise NoSuchHandlerError("Couldn't find handler %r for %r" % (handler_name, block))
+	    # loop through asides before getting to fallback_handler
+	    for aside_type in self.applicable_aside_types(block):
+		aside = self.get_aside_of_type(block, aside_type)
+		if hasattr(aside, handler_name):
+		    handler = getattr(aside, handler_name)
+		    results = handler(request, suffix)		    
+		    break 
+	    if handler is None:
+                fallback_handler = getattr(block, "fallback_handler", None)
+                if fallback_handler and getattr(fallback_handler, '_is_xblock_handler', False):
+                    # Cache results of the handler call for later saving
+                    results = fallback_handler(handler_name, request, suffix)
+                else:
+                    raise NoSuchHandlerError("Couldn't find handler %r for %r" % (handler_name, block))
 
         # Write out dirty fields
         block.save()
